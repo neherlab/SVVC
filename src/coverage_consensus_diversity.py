@@ -19,7 +19,7 @@ def plot_coverage_concatenated(sample, ac, figure_path):
     print("Sample", sample)
     for ref, counts in sorted(ac, key=lambda x:x[1].shape[-1], reverse=True):
         cov = coverage(counts)
-        coverage_stat['cov'] = np.mean(cov)
+        coverage_stat[ref] = {'cov':np.mean(cov)}
         seg = ref.split('_')[-1]
         plt.plot(offset+np.arange(counts.shape[-1]), coverage(counts), c='r')
         ticks.append([offset+counts.shape[-1]/2, seg])
@@ -43,24 +43,25 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
     print("Sample", sample)
     diversity = {}
     for ref, counts in sorted(ac, key=lambda x:x[1].shape[-1], reverse=True):
+        diversity[ref] = {}
         cov = coverage(counts)
         seg = ref.split('_')[-1]
-        freq = 1.0*counts/[cov+0.001]
+        freq = 1.0*counts/(cov+0.001)
         div = (1-np.sum(freq**2, axis=0))*primer_mask[ref]
         div[cov<min_cov] = 0
         minor_allele = (1.0-np.max(freq, axis=0))*primer_mask[ref]
         minor_allele[cov<min_cov] = 0
-        diversity['var_pos1'] = np.sum(minor_allele[0::3]>var_cutoff)
-        diversity['var_pos2'] = np.sum(minor_allele[1::3]>var_cutoff)
-        diversity['var_pos3'] = np.sum(minor_allele[2::3]>var_cutoff)
-        diversity['mean_diversity'] = np.mean(div[cov>min_cov])
-        diversity['mean_diversity>0.01'] = np.mean((div*(minor_allele>0.01))[cov>min_cov])
-        diversity['mean_diversity>0.05'] = np.mean((div*(minor_allele>0.05))[cov>min_cov])
+        diversity[ref]['var_pos1'] = np.sum(minor_allele[0::3]>var_cutoff)
+        diversity[ref]['var_pos2'] = np.sum(minor_allele[1::3]>var_cutoff)
+        diversity[ref]['var_pos3'] = np.sum(minor_allele[2::3]>var_cutoff)
+        diversity[ref]['mean_diversity'] = np.mean(div[cov>min_cov])
+        diversity[ref]['mean_diversity>0.01'] = np.mean((div*(minor_allele>0.01))[cov>min_cov])
+        diversity[ref]['mean_diversity>0.05'] = np.mean((div*(minor_allele>0.05))[cov>min_cov])
         print([np.sum(minor_allele[i::3]>var_cutoff) for i in range(3)])
         axs[0].plot(offset+np.arange(counts.shape[-1]), div, c='r')
         axs[1].plot(sorted(((1-np.max(freq, axis=0))*primer_mask[ref])[cov>min_cov]), np.linspace(1,0, np.sum(cov>min_cov)), c='r')
         offset+=counts.shape[-1]+gap
-        plt.suptitle('sample %s'%sample + ' -- sites>var_cutoff in codon p1:%d, p2: %d, p3:%d'%(np.sum(minor_allele[0::3]>var_cutoff), np.sum(minor_allele[1::3]>0.05), np.sum(minor_allele[2::3]>0.05)))
+        plt.suptitle('sample %s'%sample + ' -- sites>0.05 in codon p1:%d, p2: %d, p3:%d'%(np.sum(minor_allele[0::3]>var_cutoff), np.sum(minor_allele[1::3]>0.05), np.sum(minor_allele[2::3]>0.05)))
 
     #plt.xticks([t[0] for t in ticks], [t[1] for t in ticks])
     axs[0].set_yscale('log')
@@ -131,5 +132,5 @@ if __name__ == '__main__':
         seqs.append(SeqRecord.SeqRecord(id=seq_name, name=seq_name, description="", seq=Seq.Seq("".join(consensus_seq))))
     SeqIO.write(seqs, args.out_dir+'/consensus.fasta', 'fasta')
 
-    df = pd.DataFrame(stats, [sample])
+    df = pd.DataFrame(stats)
     df.to_csv(args.out_dir+'/statistics.csv')
