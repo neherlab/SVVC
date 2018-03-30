@@ -46,7 +46,7 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
         diversity[ref] = {}
         cov = coverage(counts)
         seg = ref.split('_')[-1]
-        freq = 1.0*counts/(cov+0.001)
+        freq = 1.0*counts/cov
         div = (1-np.sum(freq**2, axis=0))*primer_mask[ref]
         div[cov<min_cov] = 0
         minor_allele = (1.0-np.max(freq, axis=0))*primer_mask[ref]
@@ -124,7 +124,7 @@ if __name__ == '__main__':
     sample = args.sample.split('/')[-1]
     stats = plot_coverage_concatenated(sample, ac, args.out_dir+'/figures/%s_coverage.png'%sample)
     div = plot_diversity(sample, ac, args.out_dir+"/figures/%s_diversity.png"%sample, primer_masks)
-    for k, v in div:
+    for k, v in div.items():
         stats[k].update(v)
     from Bio import SeqIO, SeqRecord, Seq
     seqs=[]
