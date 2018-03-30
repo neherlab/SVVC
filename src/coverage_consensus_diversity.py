@@ -123,7 +123,9 @@ if __name__ == '__main__':
 
     sample = args.sample.split('/')[-1]
     stats = plot_coverage_concatenated(sample, ac, args.out_dir+'/figures/%s_coverage.png'%sample)
-    stats.update(plot_diversity(sample, ac, args.out_dir+"/figures/%s_diversity.png"%sample, primer_masks))
+    div = plot_diversity(sample, ac, args.out_dir+"/figures/%s_diversity.png"%sample, primer_masks)
+    for k, v in div:
+        stats[k].update(v)
     from Bio import SeqIO, SeqRecord, Seq
     seqs=[]
     for ref, counts in ac:
