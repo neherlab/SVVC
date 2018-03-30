@@ -1,6 +1,3 @@
-nuc_alpha = np.array(['A', 'C', 'G', 'T', '-', 'N'], dtype='S1')
-alpha = nuc_alpha
-
 def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max_isize = 700, VERBOSE = 0):
     '''
     calculates the allele counts for a set of mapped reads
@@ -14,6 +11,9 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max
     import numpy as np
     import pysam
     from collections import defaultdict
+
+    nuc_alpha = np.array(['A', 'C', 'G', 'T', '-', 'N'], dtype='S1')
+    alpha = nuc_alpha
 
     def ac_array(length, paired):
         if paired:

@@ -1,5 +1,5 @@
 from __future__ import print_function
-from create_allele_counts import load_sample
+from create_allele_counts import load_allele_counts
 import glob, sys,os, argparse
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,6 +8,7 @@ sns.set_style('whitegrid')
 
 nuc_alpha = np.array(['A', 'C', 'G', 'T', '-', 'N'], dtype='S1')
 alpha = nuc_alpha
+gap = 200 # space between segments
 
 def plot_coverage_concatenated(sample, ac, figure_path):
     coverage_stat = {}
@@ -35,7 +36,7 @@ def plot_coverage_concatenated(sample, ac, figure_path):
     plt.close()
     return coverage_stat
 
-def plot_diversity(sample, ac, figure_path, primer_mask):
+def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff=0.05):
     fig, axs = plt.subplots(1,2, figsize = (20, 8))
     offset = 0
     ticks = []
@@ -44,20 +45,22 @@ def plot_diversity(sample, ac, figure_path, primer_mask):
     for ref, counts in sorted(ac, key=lambda x:x[1].shape[-1], reverse=True):
         cov = coverage(counts)
         seg = ref.split('_')[-1]
-        freq = 1.0*counts/cov
-        div = (1-np.sum(freq**2, axis=0))*primer_mask[ref]*(cov>100)
-        minor_allele = (1.0-np.max(freq, axis=0))*primer_mask[ref]*(cov>100)
-        diversity['var_pos1'] = np.sum(minor_allele[0::3]>0.05)
-        diversity['var_pos2'] = np.sum(minor_allele[1::3]>0.05)
-        diversity['var_pos3'] = np.sum(minor_allele[2::3]>0.05)
-        diversity['mean_diversity'] = np.mean(div[cov>100])
-        diversity['mean_diversity>0.01'] = np.mean((div*(minor_allele>0.01))[cov>100])
-        diversity['mean_diversity>0.05'] = np.mean((div*(minor_allele>0.05))[cov>100])
-        print([np.sum(minor_allele[i::3]>0.05) for i in range(3)])
+        freq = 1.0*counts/[cov+0.001]
+        div = (1-np.sum(freq**2, axis=0))*primer_mask[ref]
+        div[cov<min_cov] = 0
+        minor_allele = (1.0-np.max(freq, axis=0))*primer_mask[ref]
+        minor_allele[cov<min_cov] = 0
+        diversity['var_pos1'] = np.sum(minor_allele[0::3]>var_cutoff)
+        diversity['var_pos2'] = np.sum(minor_allele[1::3]>var_cutoff)
+        diversity['var_pos3'] = np.sum(minor_allele[2::3]>var_cutoff)
+        diversity['mean_diversity'] = np.mean(div[cov>min_cov])
+        diversity['mean_diversity>0.01'] = np.mean((div*(minor_allele>0.01))[cov>min_cov])
+        diversity['mean_diversity>0.05'] = np.mean((div*(minor_allele>0.05))[cov>min_cov])
+        print([np.sum(minor_allele[i::3]>var_cutoff) for i in range(3)])
         axs[0].plot(offset+np.arange(counts.shape[-1]), div, c='r')
-        axs[1].plot(sorted(((1-np.max(freq, axis=0))*primer_mask[ref])[cov>100]), np.linspace(1,0, np.sum(cov>100)), c='r')
+        axs[1].plot(sorted(((1-np.max(freq, axis=0))*primer_mask[ref])[cov>min_cov]), np.linspace(1,0, np.sum(cov>min_cov)), c='r')
         offset+=counts.shape[-1]+gap
-        plt.suptitle('sample %s'%sample + ' -- sites>0.05 in codon p1:%d, p2: %d, p3:%d'%(np.sum(minor_allele[0::3]>0.05), np.sum(minor_allele[1::3]>0.05), np.sum(minor_allele[2::3]>0.05)))
+        plt.suptitle('sample %s'%sample + ' -- sites>var_cutoff in codon p1:%d, p2: %d, p3:%d'%(np.sum(minor_allele[0::3]>var_cutoff), np.sum(minor_allele[1::3]>0.05), np.sum(minor_allele[2::3]>0.05)))
 
     #plt.xticks([t[0] for t in ticks], [t[1] for t in ticks])
     axs[0].set_yscale('log')
@@ -101,29 +104,32 @@ if __name__ == '__main__':
     args = parser.parse_args()
     stats = {}
 
-    ac = load_sample(args.sample)
+    ac = load_allele_counts(args.sample)
 
     import pandas as pd
     if args.primers:
-        primers = pd.read_csv(args.primers)
+        primers = pd.read_csv(args.primers,skipinitialspace=True)
 
     primer_masks = {}
     for ref, counts in ac:
-        primer_mask[ref] = np.ones(ac.shape[1], dtype=int)
+        primer_masks[ref] = np.ones(counts.shape[-1], dtype=int)
     if args.primers:
         for pi,p in primers.iterrows():
-            if p.segment in primer_mask:
-                primer_mask[p.segment][p.start:p.end]=0
+            if p.segment in primer_masks:
+                primer_masks[p.segment][p.start:p.end]=0
             else:
                 print(p.segment, "is not among the mapped segments")
 
-    cov = plot_coverage_concatenated(args.sample, ac, args.out_dir+'/%s_coverage.png'%sample)
-    div = plot_diversity(sample, ac, args.out_dir+"/%s_coverage.png"%sample, primer_mask)
+    sample = args.sample.split('/')[-1]
+    stats = plot_coverage_concatenated(sample, ac, args.out_dir+'/figures/%s_coverage.png'%sample)
+    stats.update(plot_diversity(sample, ac, args.out_dir+"/figures/%s_diversity.png"%sample, primer_masks))
     from Bio import SeqIO, SeqRecord, Seq
     seqs=[]
     for ref, counts in ac:
         consensus_seq = consensus(counts, min_cov=args.min_cov)
-        seq_name = args.sample+'_'+ref
+        seq_name = sample+'_'+ref
         seqs.append(SeqRecord.SeqRecord(id=seq_name, name=seq_name, description="", seq=Seq.Seq("".join(consensus_seq))))
     SeqIO.write(seqs, args.out_dir+'/consensus.fasta', 'fasta')
 
+    df = pd.DataFrame(stats, [sample])
+    df.to_csv(args.out_dir+'/statistics.csv')
