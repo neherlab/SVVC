@@ -170,14 +170,14 @@ if __name__=="__main__":
     parser.add_argument('--bam_file',
                         help='bam file to pile up')
 
-    parser.add_argument('--outdir',
+    parser.add_argument('--out_dir',
                         help='directory to save results')
     args = parser.parse_args()
 
-    ac = sam_to_allele_counts(params.bam_file, qual_min=30, VERBOSE=3, max_isize = 600, paired=True)
+    ac = sam_to_allele_counts(args.bam_file, qual_min=30, VERBOSE=3, max_isize = 600, paired=True)
     ac_renamed = []
     for refname, counts, insertions in ac:
         ac_renamed.append((refname.replace('/', '_'), counts, insertions))
     ac = ac_renamed
 
-    dump_allele_counts(params.outdir, ac)
+    dump_allele_counts(args.out_dir, ac)

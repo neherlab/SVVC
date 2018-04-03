@@ -1,4 +1,7 @@
 from __future__ import print_function
+import matplotlib
+# important to use a non-interactive backend, otherwise will crash on cluster
+matplotlib.use('PDF')
 from create_allele_counts import load_allele_counts
 import glob, sys,os, argparse
 import matplotlib.pyplot as plt
@@ -122,8 +125,8 @@ if __name__ == '__main__':
                 print(p.segment, "is not among the mapped segments")
 
     sample = args.sample.split('/')[-1]
-    stats = plot_coverage_concatenated(sample, ac, args.out_dir+'/figures/%s_coverage.png'%sample)
-    div = plot_diversity(sample, ac, args.out_dir+"/figures/%s_diversity.png"%sample, primer_masks)
+    stats = plot_coverage_concatenated(sample, ac, args.out_dir+'/figures/coverage.png')
+    div = plot_diversity(sample, ac, args.out_dir+"/figures/diversity.png", primer_masks)
     for k, v in div.items():
         stats[k].update(v)
     from Bio import SeqIO, SeqRecord, Seq
