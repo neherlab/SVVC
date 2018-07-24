@@ -45,6 +45,7 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
     ticks = []
     print("Sample", sample)
     diversity = {}
+    cols = ['r', 'b', 'g']
     for ref, counts in sorted(ac, key=lambda x:x[1].shape[-1], reverse=True):
         diversity[ref] = {}
         cov = coverage(counts)
@@ -62,7 +63,12 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
         diversity[ref]['mean_diversity>0.05'] = np.mean((div*(minor_allele>0.05))[cov>min_cov])
         print([np.sum(minor_allele[i::3]>var_cutoff) for i in range(3)])
         axs[0].plot(offset+np.arange(counts.shape[-1]), div, c='r')
-        axs[1].plot(sorted(((1-np.max(freq, axis=0))*primer_mask[ref])[cov>min_cov]), np.linspace(1,0, np.sum(cov>min_cov)), c='r')
+        max_freq = np.max(freq, axis=0)
+        pos = np.arange(max_freq.shape[0])
+        for ci in range(3):
+            sub_set = 1-max_freq[((pos%3)==ci) & (cov>1000) & (primer_mask>0)]
+            axs[1].plot(sorted(sub_set), np.linspace(1,0, len(sub_set)), c=cols[ci])
+
         offset+=counts.shape[-1]+gap
         plt.suptitle('sample %s'%sample + ' -- sites>0.05 in codon p1:%d, p2: %d, p3:%d'%(np.sum(minor_allele[0::3]>var_cutoff), np.sum(minor_allele[1::3]>0.05), np.sum(minor_allele[2::3]>0.05)))
 
@@ -70,11 +76,26 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
     axs[0].set_yscale('log')
     axs[0].set_ylabel('diversity')
     axs[1].set_xscale('log')
+    axs[1].set_yscale('log')
     axs[1].set_ylabel('fraction above')
     axs[1].set_xlabel('minor variant frequency')
     plt.savefig(figure_path)
     plt.close()
     return diversity
+
+def get_primer_mask(primer_file, ac):
+    import pandas as pd
+    primers = pd.read_csv(primer_file,skipinitialspace=True)
+
+    primer_masks = {}
+    for ref, counts in ac:
+        primer_masks[ref] = np.ones(counts.shape[-1], dtype=int)
+
+    for pi,p in primers.iterrows():
+        if p.segment in primer_masks:
+            primer_masks[p.segment][p.start:p.end]=0
+        else:
+            print(p.segment, "is not among the mapped segments")
 
 
 def coverage(ac, window = None):
@@ -108,21 +129,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     stats = {}
 
-    ac = load_allele_counts(args.sample)
-
-    import pandas as pd
+    ac,ins = load_allele_counts(args.sample)
     if args.primers:
-        primers = pd.read_csv(args.primers,skipinitialspace=True)
+        primer_masks = get_primer_mask(args.primers, ac)
 
-    primer_masks = {}
-    for ref, counts in ac:
-        primer_masks[ref] = np.ones(counts.shape[-1], dtype=int)
-    if args.primers:
-        for pi,p in primers.iterrows():
-            if p.segment in primer_masks:
-                primer_masks[p.segment][p.start:p.end]=0
-            else:
-                print(p.segment, "is not among the mapped segments")
 
     sample = args.sample.split('/')[-1]
     stats = plot_coverage_concatenated(sample, ac, args.out_dir+'/figures/coverage.png')
@@ -131,10 +141,43 @@ if __name__ == '__main__':
         stats[k].update(v)
     from Bio import SeqIO, SeqRecord, Seq
     seqs=[]
+    insertions_to_include = []
     for ref, counts in ac:
         consensus_seq = consensus(counts, min_cov=args.min_cov)
-        seq_name = sample+'_'+ref
-        seqs.append(SeqRecord.SeqRecord(id=seq_name, name=seq_name, description="", seq=Seq.Seq("".join(consensus_seq))))
+        cov = coverage(counts)
+        for pos in ins[ref]:
+            total_insertion = np.sum([c.sum() for insertion, c in ins[ref][pos].items()])
+            total_freq = 1.0*total_insertion/cov[pos]
+            max_insertion = [pos, 0,0]
+            for insertion, c in ins[ref][pos].items():
+                ins_freq = 1.0*c.sum()/cov[pos]
+                if ins_freq>max_insertion[2]:
+                    max_insertion = [pos, insertion, ins_freq]
+                if ins_freq>0.3:
+                    print(sample + ": frequent insertion %s at position %d with frequency %f."%(insertion, pos, ins_freq))
+                elif ins_freq>0.01:
+                    print(sample + ": rare insertion %s at position %d with frequency %f."%(insertion, pos, ins_freq))
+
+            # id the most frequent insertion is more common than no insertion
+            if 1-total_freq<max_insertion[2]:
+                insertions_to_include.append(max_insertion)
+
+        seq = "".join(consensus_seq)
+        if insertions_to_include:
+            complete_seq = ""
+            pos = 0
+            for ins_pos, ins, freq in insertions_to_include:
+                complete_seq += seq[pos:ins_pos] + ins
+                pos=ins_pos
+                print(sample + ": inserted %s at position %d with frequency %f."%(ins, ins_pos, freq))
+            complete_seq += seq[pos:]
+            seq=complete_seq
+
+        if len(ac)==1:
+            seq_name = sample
+        else:
+            seq_name = sample + '_' + ref
+        seqs.append(SeqRecord.SeqRecord(id=seq_name, name=seq_name, description="", seq=Seq.Seq(seq)))
     SeqIO.write(seqs, args.out_dir+'/consensus.fasta', 'fasta')
 
     df = pd.DataFrame(stats)

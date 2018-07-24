@@ -1,4 +1,4 @@
-def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max_isize = 700, VERBOSE = 0):
+def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max_isize = 700, VERBOSE = 0, primer_regions = None):
     '''
     calculates the allele counts for a set of mapped reads
     parameters:
@@ -35,7 +35,7 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max
     with pysam.Samfile(sam_fname) as samfile:
         ac =  []
         for nref in xrange(samfile.nreferences):
-            if VERBOSE: print "allocating for:", samfile.getrname(nref), "length:", samfile.lengths[nref]
+            if VERBOSE: print("allocating for:", samfile.getrname(nref), "length:", samfile.lengths[nref])
             ac.append((samfile.getrname(nref), ac_array(samfile.lengths[nref], paired),
                         insertion_data_structure(paired)))
 
@@ -44,14 +44,14 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max
             # Max number of reads
             if i == max_reads:
                 if VERBOSE >= 2:
-                    print 'Max reads reached:', max_reads
+                    print('Max reads reached:', max_reads)
                 break
 
             if read.is_unmapped or np.abs(read.isize)>max_isize:
                 continue
             # Print output
             if (VERBOSE > 2) and (not ((i +1) % 10000)):
-                print (i+1)
+                print(i+1)
 
             # Read CIGARs (they should be clean by now)
             if paired:
@@ -121,7 +121,7 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max
                 # Other types of cigar?
                 else:
                     if VERBOSE>2:
-                        print "unrecognized CIGAR type:", read.cigarstring
+                        print("unrecognized CIGAR type:", read.cigarstring)
                     #raise ValueError('CIGAR type '+str(block_type)+' not recognized')
 
     return ac
@@ -131,14 +131,14 @@ def dump_allele_counts(dirname, ac, suffix=''):
     import cPickle, gzip, os
     dirname = dirname.rstrip('/')+'/'
     if not os.path.isdir(dirname):
-        print "creating directory", dirname
+        print("creating directory", dirname)
         try:
             os.mkdir(dirname)
         except:
             raise("creating directory failed", dirname)
 
     for refname, ac_array, insertions in ac:
-        print refname
+        print(refname)
         outname = refname.split("|")[-1]
         np.savez_compressed(dirname + outname+'_allele_counts' + suffix + '.npz', ac_array)
         with gzip.open(dirname + outname+'_insertions' + suffix + '.pkl.gz','w') as outfile:
@@ -152,16 +152,29 @@ def load_allele_counts(dirname, suffix=''):
     tmp_ac = {}
     ac_flist = glob.glob(dirname+'*_allele_counts' + suffix + '.npz')
     for fname in ac_flist:
-        #print "reading",fname
-        refname = fname.split('/')[-1].rstrip('_allele_counts' + suffix + '.npz')
+        #print("reading",fname)
+        tmp = '_allele_counts' + suffix + '.npz'
+        refname = fname.split('/')[-1][:-len(tmp)]
         tmp_ac[refname] = np.load(fname).items()[0][1]
 
-    ac = []
+    ins_flist = glob.glob(dirname+'*insertions' + suffix + '.pkl.gz')
+    tmp_ins = {}
+    for fname in ins_flist:
+        #print("reading",fname)
+        tmp = '_insertions' + suffix + '.pkl.gz'
+        refname = fname.split('/')[-1][:-len(tmp)]
+        with gzip.open(fname) as fh:
+            tmp_ins[refname] = cPickle.load(fh)
 
+    ac = []
     for refname in tmp_ac:
         ac.append((refname, tmp_ac[refname].sum(axis=0).sum(axis=0)))
 
-    return ac
+    # ins = []
+    # for refname in tmp_ins:
+    #     ins.append((refname, tmp_ins[refname]))
+
+    return ac, tmp_ins
 
 if __name__=="__main__":
     import argparse
