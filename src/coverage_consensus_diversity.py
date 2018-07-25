@@ -7,6 +7,7 @@ import glob, sys,os, argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+import pandas as pd
 sns.set_style('whitegrid')
 
 nuc_alpha = np.array(['A', 'C', 'G', 'T', '-', 'N'], dtype='S1')
@@ -85,17 +86,19 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
 
 def get_primer_mask(primer_file, ac):
     import pandas as pd
-    primers = pd.read_csv(primer_file,skipinitialspace=True)
 
     primer_masks = {}
     for ref, counts in ac:
         primer_masks[ref] = np.ones(counts.shape[-1], dtype=int)
 
-    for pi,p in primers.iterrows():
-        if p.segment in primer_masks:
-            primer_masks[p.segment][p.start:p.end]=0
-        else:
-            print(p.segment, "is not among the mapped segments")
+    if primer_file:
+        primers = pd.read_csv(primer_file,skipinitialspace=True)
+        for pi,p in primers.iterrows():
+            if p.segment in primer_masks:
+                primer_masks[p.segment][p.start:p.end]=0
+            else:
+                print(p.segment, "is not among the mapped segments")
+    return primer_masks
 
 
 def coverage(ac, window = None):
@@ -117,6 +120,7 @@ def consensus(ac, min_cov=1):
 
 # Script
 if __name__ == '__main__':
+    import pandas as pd
 
     # Parse input args
     parser = argparse.ArgumentParser(description='plot coverage, diversity and output consensus sequence',
@@ -130,8 +134,7 @@ if __name__ == '__main__':
     stats = {}
 
     ac,ins = load_allele_counts(args.sample)
-    if args.primers:
-        primer_masks = get_primer_mask(args.primers, ac)
+    primer_masks = get_primer_mask(args.primers, ac)
 
 
     sample = args.sample.split('/')[-1]
@@ -146,6 +149,8 @@ if __name__ == '__main__':
         consensus_seq = consensus(counts, min_cov=args.min_cov)
         cov = coverage(counts)
         for pos in ins[ref]:
+            if cov[pos]<args.min_cov:
+                continue
             total_insertion = np.sum([c.sum() for insertion, c in ins[ref][pos].items()])
             total_freq = 1.0*total_insertion/cov[pos]
             max_insertion = [pos, 0,0]

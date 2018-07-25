@@ -1,4 +1,6 @@
-def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max_isize = 700, VERBOSE = 0, primer_regions = None):
+def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
+                         max_isize = 700, VERBOSE = 0,
+                         fwd_primer_regions = None, rev_primer_regions = None):
     '''
     calculates the allele counts for a set of mapped reads
     parameters:
@@ -34,8 +36,10 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max
     # Open BAM or SAM file
     with pysam.Samfile(sam_fname) as samfile:
         ac =  []
+        refs = {}
         for nref in xrange(samfile.nreferences):
             if VERBOSE: print("allocating for:", samfile.getrname(nref), "length:", samfile.lengths[nref])
+            refs[0]=samfile.getrname(nref)
             ac.append((samfile.getrname(nref), ac_array(samfile.lengths[nref], paired),
                         insertion_data_structure(paired)))
 
@@ -63,12 +67,35 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max
 
             seq = np.fromstring(read.seq, 'S1')
             qual = np.fromstring(read.qual, np.int8) - 33
+            not_primer = np.ones_like(seq, 'bool')
             pos = read.pos
+
+            if rev_primer_regions:
+#                if (read.is_reverse) or np.abs(read.isize)==seq.shape[0]:
+                read_end = pos + seq.shape[0]
+                for b,e in rev_primer_regions[refs[read.rname]]:
+                    p_length = e-b
+                    if read_end-b>0 and read_end-b<p_length:
+                        not_primer[-(read_end-b):]=False
+                        break
+
+            if fwd_primer_regions:
+#                if (read.is_read1 and read.isize>0) or (read.is_read2 and read.isize<0) or np.abs(read.isize)==seq.shape[0]:
+                for b,e in fwd_primer_regions[refs[read.rname]]:
+                    p_length = e-b
+                    if pos-b>0 and pos-b<p_length:
+                        not_primer[:e-pos]=False
+                        break
+
+            # if pos+len(seq)>7267:
+            # 	import ipdb;ipdb.set_trace()
             # Iterate over CIGARs
             for ic, (block_type, block_len) in enumerate(read.cigar):
                 if block_type==4: # softclip
                     seq = seq[block_len:]
                     qual = qual[block_len:]
+                    # not the difference here: the reported position starts after the softclip. hence the not_primer is already correct
+                    not_primer = not_primer[:-block_len]
                     continue
                 if block_type==5: # hard clip
                     continue
@@ -81,9 +108,10 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max
                 if block_type == 0:
                     seqb = seq[:block_len]
                     qualb = qual[:block_len]
+                    not_primerb = not_primer[:block_len]
                     # Increment counts
                     for j, a in enumerate(alpha):
-                        posa = ((seqb == a) & (qualb >= qual_min)).nonzero()[0]
+                        posa = ((seqb == a) & (qualb >= qual_min) & (not_primerb)).nonzero()[0]
                         if len(posa):
                             counts[j,pos + posa] += 1
 
@@ -91,6 +119,7 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max
                     if ic != len(read.cigar) - 1:
                         seq = seq[block_len:]
                         qual = qual[block_len:]
+                        not_primer = not_primer[block_len:]
                         pos += block_len
 
                 # Deletion
@@ -106,6 +135,7 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max
                 elif block_type == 1:
                     seqb = seq[:block_len]
                     qualb = qual[:block_len]
+                    not_primerb = not_primer[:block_len]
                     # Accept only high-quality inserts
                     if (qualb >= qual_min).all():
                         if paired:
@@ -117,6 +147,7 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1, max
                     if ic != len(read.cigar) - 1:
                         seq = seq[block_len:]
                         qual = qual[block_len:]
+                        not_primer = not_primer[block_len:]
 
                 # Other types of cigar?
                 else:
@@ -143,6 +174,25 @@ def dump_allele_counts(dirname, ac, suffix=''):
         np.savez_compressed(dirname + outname+'_allele_counts' + suffix + '.npz', ac_array)
         with gzip.open(dirname + outname+'_insertions' + suffix + '.pkl.gz','w') as outfile:
             cPickle.dump({k:dict(v) for k,v in insertions.iteritems()}, outfile)
+
+
+def get_primer_intervals(primer_file):
+    import pandas as pd
+    from collections import defaultdict
+
+    fwd_primer_intervals = defaultdict(list)
+    rev_primer_intervals = defaultdict(list)
+
+    if primer_file:
+        primers = pd.read_csv(primer_file,skipinitialspace=True)
+        for pi,p in primers.iterrows():
+            print(pi,p.loc['name'])
+            if 'fwd' in p.loc['name']:
+                fwd_primer_intervals[p.segment].append(sorted((p.start, p.end)))
+            else:
+                rev_primer_intervals[p.segment].append(sorted((p.start, p.end)))
+
+    return fwd_primer_intervals, rev_primer_intervals
 
 
 def load_allele_counts(dirname, suffix=''):
@@ -185,9 +235,12 @@ if __name__=="__main__":
 
     parser.add_argument('--out_dir',
                         help='directory to save results')
+    parser.add_argument('--primers', type=str, help='file with primers to mask in pile up')
     args = parser.parse_args()
-
-    ac = sam_to_allele_counts(args.bam_file, qual_min=30, VERBOSE=3, max_isize = 600, paired=True)
+    fwd_primer_intervals, rev_primer_intervals = get_primer_intervals(args.primers)
+    print(fwd_primer_intervals, rev_primer_intervals)
+    ac = sam_to_allele_counts(args.bam_file, qual_min=30, VERBOSE=3, max_isize = 600, paired=True,
+                              fwd_primer_regions = fwd_primer_intervals, rev_primer_regions = rev_primer_intervals)
     ac_renamed = []
     for refname, counts, insertions in ac:
         ac_renamed.append((refname.replace('/', '_'), counts, insertions))

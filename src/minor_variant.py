@@ -63,6 +63,8 @@ if __name__ == '__main__':
             any_minors = True
 
         for pos in ins[ref]:
+            if cov[pos]<args.min_cov:
+                continue
             total_insertion = np.sum([c.sum() for insertion, c in ins[ref][pos].items()])
             total_freq = 1.0*total_insertion/cov[pos]
             if total_freq<args.min_freq:
@@ -81,7 +83,7 @@ if __name__ == '__main__':
             print(sample, ref, 'minor insertions', alterations)
             complete_seq = ""
             pos = 0
-            for ins_pos, ins, freq in insertions_to_include:
+            for ins_pos, ins, freq in sorted(insertions_to_include, key=lambda x:x[0]):
                 complete_seq += seq[pos:ins_pos] + ins
                 pos=ins_pos
                 print(sample + ": inserted %s at position %d with frequency %f."%(ins, ins_pos, freq))
