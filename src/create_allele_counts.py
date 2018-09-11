@@ -1,3 +1,21 @@
+import numpy as np
+nuc_alpha = np.array(['A', 'C', 'G', 'T', '-', 'N'], dtype='S1')
+
+def insert_size_distribution(sam_fname):
+    '''
+    '''
+    import pysam
+
+    smax=1000
+    isize_dis = np.zeros(smax)
+    # Open BAM or SAM file
+    with pysam.Samfile(sam_fname) as samfile:
+        for i, read in enumerate(samfile):
+            if np.abs(read.isize)<smax:
+                isize_dis[np.abs(read.isize)]+=1
+    return isize_dis
+
+
 def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
                          max_isize = 700, VERBOSE = 0,
                          fwd_primer_regions = None, rev_primer_regions = None):
@@ -10,11 +28,9 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
     max_isize   --   maximal insert sizes to consider. this can be used to remove artifactual mappings
     qual_min    --   Ignore bases with quality less than qmin
     '''
-    import numpy as np
     import pysam
     from collections import defaultdict
 
-    nuc_alpha = np.array(['A', 'C', 'G', 'T', '-', 'N'], dtype='S1')
     alpha = nuc_alpha
 
     def ac_array(length, paired):
@@ -39,7 +55,7 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
         refs = {}
         for nref in xrange(samfile.nreferences):
             if VERBOSE: print("allocating for:", samfile.getrname(nref), "length:", samfile.lengths[nref])
-            refs[0]=samfile.getrname(nref)
+            refs[nref]=samfile.getrname(nref)
             ac.append((samfile.getrname(nref), ac_array(samfile.lengths[nref], paired),
                         insertion_data_structure(paired)))
 
@@ -51,8 +67,9 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
                     print('Max reads reached:', max_reads)
                 break
 
-            if read.is_unmapped or np.abs(read.isize)>max_isize:
+            if read.is_unmapped or np.abs(read.isize)>max_isize or read.is_secondary or read.is_supplementary:
                 continue
+
             # Print output
             if (VERBOSE > 2) and (not ((i +1) % 10000)):
                 print(i+1)
@@ -69,23 +86,23 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
             qual = np.fromstring(read.qual, np.int8) - 33
             not_primer = np.ones_like(seq, 'bool')
             pos = read.pos
-
+            # all legit reads should be FR or RF!
             if rev_primer_regions:
-#                if (read.is_reverse) or np.abs(read.isize)==seq.shape[0]:
-                read_end = pos + seq.shape[0]
-                for b,e in rev_primer_regions[refs[read.rname]]:
-                    p_length = e-b
-                    if read_end-b>0 and read_end-b<p_length:
-                        not_primer[-(read_end-b):]=False
-                        break
+                if read.is_reverse or np.abs(read.isize)==seq.shape[0]:
+                    read_end = pos + seq.shape[0]
+                    for b,e in rev_primer_regions[refs[read.rname]]:
+                        p_length = e-b
+                        if read_end-b>0 and read_end-b<p_length:
+                            not_primer[-(read_end-b):]=False
+                            break
 
             if fwd_primer_regions:
-#                if (read.is_read1 and read.isize>0) or (read.is_read2 and read.isize<0) or np.abs(read.isize)==seq.shape[0]:
-                for b,e in fwd_primer_regions[refs[read.rname]]:
-                    p_length = e-b
-                    if pos-b>0 and pos-b<p_length:
-                        not_primer[:e-pos]=False
-                        break
+                if (not read.is_reverse) or np.abs(read.isize)==seq.shape[0]:
+                    for b,e in fwd_primer_regions[refs[read.rname]]:
+                        p_length = e-b
+                        if pos-b>0 and pos-b<p_length:
+                            not_primer[:e-pos]=False
+                            break
 
             # if pos+len(seq)>7267:
             # 	import ipdb;ipdb.set_trace()
@@ -158,7 +175,6 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
     return ac
 
 def dump_allele_counts(dirname, ac, suffix=''):
-    import numpy as np
     import cPickle, gzip, os
     dirname = dirname.rstrip('/')+'/'
     if not os.path.isdir(dirname):
@@ -196,7 +212,6 @@ def get_primer_intervals(primer_file):
 
 
 def load_allele_counts(dirname, suffix=''):
-    import numpy as np
     import cPickle, gzip, glob
     dirname = dirname.rstrip('/')+'/'
     tmp_ac = {}

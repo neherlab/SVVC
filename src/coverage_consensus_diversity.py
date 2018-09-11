@@ -1,11 +1,12 @@
 from __future__ import print_function
+from collections import defaultdict
+import glob, sys,os, argparse
+import numpy as np
 import matplotlib
 # important to use a non-interactive backend, otherwise will crash on cluster
 matplotlib.use('PDF')
-from create_allele_counts import load_allele_counts
-import glob, sys,os, argparse
 import matplotlib.pyplot as plt
-import numpy as np
+from create_allele_counts import load_allele_counts
 import seaborn as sns
 import pandas as pd
 sns.set_style('whitegrid')
@@ -14,7 +15,7 @@ nuc_alpha = np.array(['A', 'C', 'G', 'T', '-', 'N'], dtype='S1')
 alpha = nuc_alpha
 gap = 200 # space between segments
 
-def plot_coverage_concatenated(sample, ac, figure_path):
+def plot_coverage_concatenated(sample, ac, figure_path, primer_boundaries=None):
     coverage_stat = {}
     plt.figure(figsize = (18, 8))
     offset = 0
@@ -32,7 +33,10 @@ def plot_coverage_concatenated(sample, ac, figure_path):
             print(sample, ref, "has very low coverage: %2.1f"%cov.mean(), "fraction blow 100: %1.2f"%(cov<100).mean())
         elif (cov<1000).mean()>0.20:
             print(sample, ref, "has low coverage: %2.1f"%cov.mean(), "fraction blow 100: %1.2f"%(cov<100).mean())
-
+        if primer_boundaries and ref in primer_boundaries:
+            for p in primer_boundaries[ref]:
+                y = 2 if int(p[1])%2 else 6
+                plt.plot([primer_boundaries[ref][p]['start'], primer_boundaries[ref][p]['end']],[y,y], lw=10, c=(0.7, 0.7, 0.7))
 
     #plt.xticks([t[0] for t in ticks], [t[1] for t in ticks])
     plt.yscale('log')
@@ -40,7 +44,7 @@ def plot_coverage_concatenated(sample, ac, figure_path):
     plt.close()
     return coverage_stat
 
-def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff=0.05):
+def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff=0.05, primer_boundaries=None):
     fig, axs = plt.subplots(1,2, figsize = (20, 8))
     offset = 0
     ticks = []
@@ -73,6 +77,11 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
         offset+=counts.shape[-1]+gap
         plt.suptitle('sample %s'%sample + ' -- sites>0.05 in codon p1:%d, p2: %d, p3:%d'%(np.sum(minor_allele[0::3]>var_cutoff), np.sum(minor_allele[1::3]>0.05), np.sum(minor_allele[2::3]>0.05)))
 
+        if primer_boundaries and ref in primer_boundaries:
+            for p in primer_boundaries[ref]:
+                y = 0.002 if int(p[1])%2 else 0.001
+                axs[0].plot([primer_boundaries[ref][p]['start'], primer_boundaries[ref][p]['end']],[y,y], lw=10, c=(0.7, 0.7, 0.7))
+
     #plt.xticks([t[0] for t in ticks], [t[1] for t in ticks])
     axs[0].set_yscale('log')
     axs[0].set_ylabel('diversity')
@@ -99,6 +108,26 @@ def get_primer_mask(primer_file, ac):
             else:
                 print(p.segment, "is not among the mapped segments")
     return primer_masks
+
+def get_fragment_boundaries(primer_file, ac):
+    import pandas as pd
+
+    primer_boundaries = {}
+    for ref, counts in ac:
+        primer_boundaries[ref] = defaultdict(dict)
+
+    if primer_file:
+        primers = pd.read_csv(primer_file,skipinitialspace=True)
+        for pi,p in primers.iterrows():
+            if p.segment in primer_boundaries:
+                name,fr = p.loc['name'].split('_')
+                if fr=='fwd':
+                    primer_boundaries[p.segment][name]['start']=max(p.start, p.end)
+                elif fr=='rev':
+                    primer_boundaries[p.segment][name]['end']=min(p.start, p.end)
+            else:
+                print(p.segment, "is not among the mapped segments")
+    return primer_boundaries
 
 
 def coverage(ac, window = None):
@@ -135,11 +164,14 @@ if __name__ == '__main__':
 
     ac,ins = load_allele_counts(args.sample)
     primer_masks = get_primer_mask(args.primers, ac)
+    primer_boundaries = get_fragment_boundaries(args.primers, ac)
 
 
     sample = args.sample.split('/')[-1]
-    stats = plot_coverage_concatenated(sample, ac, args.out_dir+'/figures/coverage.png')
-    div = plot_diversity(sample, ac, args.out_dir+"/figures/diversity.png", primer_masks)
+    stats = plot_coverage_concatenated(sample, ac, args.out_dir+'/figures/coverage.png',
+                                       primer_boundaries=primer_boundaries)
+    div = plot_diversity(sample, ac, args.out_dir+"/figures/diversity.png", primer_masks,
+                         primer_boundaries=primer_boundaries)
     for k, v in div.items():
         stats[k].update(v)
     from Bio import SeqIO, SeqRecord, Seq

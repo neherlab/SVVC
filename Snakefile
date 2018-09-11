@@ -2,15 +2,15 @@
 reference = "/scicore/home/neher/GROUP/data/2017_Karolinska_EV-D68/references/KX675261.fasta"
 segments = ["KX675261.1"]
 SVVC_dir = "/scicore/home/neher/GROUP/data/2017_Karolinska_EV-D68/SVVC"
-run = '.'
+run = ''
 #gen_outdir = "/scicore/home/neher/GROUP/data/2017_Karolinska_EV-D68/mapped_data"
 gen_outdir = "../../../mapped_data"
 
 
 rule trim:
 	output:
-		run+"/trimmed_reads_1.fq.gz",
-		run+"/trimmed_reads_2.fq.gz"
+		run+"trimmed_reads_1.fq.gz",
+		run+"trimmed_reads_2.fq.gz"
 	params:
 		min_length = 80,
 		min_length_single = 90,
@@ -25,8 +25,8 @@ rule primers:
 	input:
 		rules.trim.output
 	output:
-		run+"/primer_trimmed_reads_1.fq.gz",
-		run+"/primer_trimmed_reads_2.fq.gz"
+		run+"primer_trimmed_reads_1.fq.gz",
+		run+"primer_trimmed_reads_2.fq.gz"
 	shell:
 		"""
 		ml cutadapt &&
@@ -37,7 +37,7 @@ rule primers:
 rule map:
 	input:
 		reference,
-		rules.primers.output
+		rules.trim.output
 	output:
 		gen_outdir + "/{sample}/mapped_reads.bam"
 	shell:
@@ -52,9 +52,23 @@ rule pileup:
 		[gen_outdir + "/{sample}/" + "%s_allele_counts.npz"%seg for seg in segments]
 	params:
 		path_to_script = SVVC_dir + '/src',
-		out_dir = gen_outdir + "/{sample}"
+		out_dir = gen_outdir + "/{sample}",
+		primers = "../../../primers.csv"
 	shell:
-		"python {params.path_to_script}/create_allele_counts.py --bam_file {input} --out_dir {params.out_dir}"
+		"python {params.path_to_script}/create_allele_counts.py --bam_file {input} --out_dir {params.out_dir} --primers {params.primers}"
+
+
+rule pair_frequencies:
+	input:
+		gen_outdir + "/{sample}/mapped_reads.bam"
+	output:
+		gen_outdir + "/{sample}/" + "pair_counts.pkl.gz"
+	params:
+		path_to_script = SVVC_dir + '/src',
+		out_dir = gen_outdir + "/{sample}",
+		primers = "../../../primers.csv"
+	shell:
+		"python2 {params.path_to_script}/pair_statistics.py --bam_file {input} --out_dir {params.out_dir} --primers {params.primers}"
 
 rule consensus:
 	input:
@@ -62,24 +76,18 @@ rule consensus:
 	output:
 		gen_outdir + "/{sample}/consensus.fasta",
 		gen_outdir + "/{sample}/figures/coverage.png",
-		gen_outdir + "/{sample}/figures/diversity.png"
+		gen_outdir + "/{sample}/figures/diversity.png",
+		gen_outdir + "/{sample}/minor.fasta"
 	params:
 		path_to_script = SVVC_dir + '/src',
-		out_dir = gen_outdir + "/{sample}"
-	shell:
-		"python2 {params.path_to_script}/coverage_consensus_diversity.py --sample {params.out_dir} --out_dir {params.out_dir}"
-
-
-rule minor:
-	input:
-		[gen_outdir + "/{sample}/" + "%s_allele_counts.npz"%seg for seg in segments]
-	output:
-		gen_outdir + "/{sample}/minor.fasta",
-	params:
-		path_to_script = SVVC_dir + '/src',
-		out_dir = gen_outdir + "/{sample}"
+		out_dir = gen_outdir + "/{sample}",
+		min_freq = 0.01,
+		min_cov = 1000
 	shell:
 		"""
-		echo {params.path_to_script}/minor_variant.py --sample {params.out_dir} --out_dir {params.out_dir} &
-		python2 {params.path_to_script}/minor_variant.py --sample {params.out_dir} --out_dir {params.out_dir}
+		echo {params.path_to_script}/coverage_consensus_diversity.py --sample {params.out_dir} --out_dir {params.out_dir} &
+		python2 {params.path_to_script}/coverage_consensus_diversity.py --sample {params.out_dir} --out_dir {params.out_dir} &
+		echo {params.path_to_script}/minor_variant.py --sample {params.out_dir} --out_dir {params.out_dir}  --min_freq {params.min_freq} --min_cov {params.min_cov} &
+		python2 {params.path_to_script}/minor_variant.py --sample {params.out_dir} --out_dir {params.out_dir} --min_freq {params.min_freq} --min_cov {params.min_cov}
 		"""
+

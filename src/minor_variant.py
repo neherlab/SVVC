@@ -1,10 +1,6 @@
 from __future__ import print_function
-import matplotlib
-# important to use a non-interactive backend, otherwise will crash on cluster
-matplotlib.use('PDF')
 from create_allele_counts import load_allele_counts
 import glob, sys,os, argparse
-import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from coverage_consensus_diversity import coverage, consensus, nuc_alpha, alpha, get_primer_mask
@@ -24,7 +20,7 @@ if __name__ == '__main__':
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--sample', required=True, type=str, help='the sample to analyze')
     parser.add_argument('--out_dir', required=True, type=str, help='directory to output')
-    parser.add_argument('--min_cov', type=int, default=100, help='minimal coverage to call consensus')
+    parser.add_argument('--min_cov', type=int, default=1000, help='minimal coverage to call consensus')
     parser.add_argument('--primers', type=str, help='file with primers to mask in diversity calculation')
     parser.add_argument('--min_freq', type=float, default=0.05, help='minimal frequency to accept minor variant')
 
