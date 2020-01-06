@@ -186,9 +186,8 @@ def dump_allele_counts(dirname, ac, suffix=''):
 
     for refname, ac_array, insertions in ac:
         print(refname)
-        outname = refname.split("|")[-1]
-        np.savez_compressed(dirname + outname+'_allele_counts' + suffix + '.npz', ac_array)
-        with gzip.open(dirname + outname+'_insertions' + suffix + '.pkl.gz','w') as outfile:
+        np.savez_compressed(dirname + 'allele_counts' + suffix + '.npz', ac_array)
+        with gzip.open(dirname + 'insertions' + suffix + '.pkl.gz','w') as outfile:
             cPickle.dump({k:dict(v) for k,v in insertions.iteritems()}, outfile)
 
 
@@ -211,11 +210,14 @@ def get_primer_intervals(primer_file):
     return fwd_primer_intervals, rev_primer_intervals
 
 
-def load_allele_counts(dirname, suffix=''):
+def load_allele_counts(dirname, suffix='', allCounts=False):
     import cPickle, gzip, glob
     dirname = dirname.rstrip('/')+'/'
     tmp_ac = {}
-    ac_flist = glob.glob(dirname+'*_allele_counts' + suffix + '.npz')
+    if allCounts:
+        ac_flist = glob.glob(dirname+'*allele_counts' + suffix + '.npz')
+    else:
+        ac_flist = glob.glob(dirname+'allele_counts' + suffix + '.npz')
     for fname in ac_flist:
         #print("reading",fname)
         tmp = '_allele_counts' + suffix + '.npz'

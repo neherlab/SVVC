@@ -42,6 +42,7 @@ if __name__ == '__main__':
     seqs = []
     from Bio import SeqIO, SeqRecord, Seq
     for ref, counts in ac:
+        print("ref", ref)
         consensus_seq = consensus(counts, min_cov=args.min_cov)
         cov = coverage(counts)
         div_pos = np.where((major_freq[ref]<1.0-args.min_freq)&(cov>args.min_cov))[0]

@@ -21,14 +21,25 @@ def plot_coverage_concatenated(sample, ac, figure_path, primer_boundaries=None):
     offset = 0
     ticks = []
     plt.title('sample %s'%sample)
+    cols = ['b','r']
+    colnum = 0
     print("Sample", sample)
-    for ref, counts in sorted(ac, key=lambda x:x[1].shape[-1], reverse=True):
+    for ref, counts in sorted(ac, key=lambda x:x[1].shape[-1], reverse=False):#True):
+        print("ref", ref)
+        if ref == '':
+            legKey = "New"
+            colour = 'r'
+        else:
+            legKey = "Old"
+            colour = 'b'
+        #legKey = "New" if ref == '' else "Old"
         cov = coverage(counts)
         coverage_stat[ref] = {'cov':np.mean(cov)}
         seg = ref.split('_')[-1]
-        plt.plot(offset+np.arange(counts.shape[-1]), coverage(counts), c='r')
+        plt.plot(offset+np.arange(counts.shape[-1]), coverage(counts), c=colour, label=legKey)#'r')
+        colnum = colnum+1 #EBH
         ticks.append([offset+counts.shape[-1]/2, seg])
-        offset+=counts.shape[-1]+gap
+        # offset+=counts.shape[-1]+gap
         if (cov<100).mean()>0.20:
             print(sample, ref, "has very low coverage: %2.1f"%cov.mean(), "fraction blow 100: %1.2f"%(cov<100).mean())
         elif (cov<1000).mean()>0.20:
@@ -40,6 +51,7 @@ def plot_coverage_concatenated(sample, ac, figure_path, primer_boundaries=None):
 
     #plt.xticks([t[0] for t in ticks], [t[1] for t in ticks])
     plt.yscale('log')
+    plt.legend(loc="lower center")
     plt.savefig(figure_path)
     plt.close()
     return coverage_stat
@@ -52,6 +64,8 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
     diversity = {}
     cols = ['r', 'b', 'g']
     for ref, counts in sorted(ac, key=lambda x:x[1].shape[-1], reverse=True):
+        if ref != '':
+            continue
         diversity[ref] = {}
         cov = coverage(counts)
         seg = ref.split('_')[-1]
@@ -158,11 +172,12 @@ if __name__ == '__main__':
     parser.add_argument('--out_dir', required=True, type=str, help='directory to output')
     parser.add_argument('--primers', type=str, help='file with primers to mask in diversity calculation')
     parser.add_argument('--min_cov', type=int, default=100, help='minimal coverage to call consensus')
+    parser.add_argument('--all_counts', action="store_true", default=False, help="plot coverage/diversity for all count files found")
 
     args = parser.parse_args()
     stats = {}
 
-    ac,ins = load_allele_counts(args.sample)
+    ac,ins = load_allele_counts(args.sample, allCounts=args.all_counts)
     primer_masks = get_primer_mask(args.primers, ac)
     primer_boundaries = get_fragment_boundaries(args.primers, ac)
 
@@ -178,6 +193,8 @@ if __name__ == '__main__':
     seqs=[]
     insertions_to_include = []
     for ref, counts in ac:
+        if ref != '':
+            continue
         consensus_seq = consensus(counts, min_cov=args.min_cov)
         cov = coverage(counts)
         for pos in ins[ref]:
