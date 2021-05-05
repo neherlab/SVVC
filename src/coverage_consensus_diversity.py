@@ -69,7 +69,7 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
         diversity[ref] = {}
         cov = coverage(counts)
         seg = ref.split('_')[-1]
-        freq = 1.0*counts/cov
+        freq = 1.0*counts/np.maximum(cov,1e-5)
         div = (1-np.sum(freq**2, axis=0))*primer_mask[ref]
         div[cov<min_cov] = 0
         minor_allele = (1.0-np.max(freq, axis=0))*primer_mask[ref]
@@ -80,7 +80,6 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
         diversity[ref]['mean_diversity'] = np.mean(div[cov>min_cov])
         diversity[ref]['mean_diversity>0.01'] = np.mean((div*(minor_allele>0.01))[cov>min_cov])
         diversity[ref]['mean_diversity>0.05'] = np.mean((div*(minor_allele>0.05))[cov>min_cov])
-        print([np.sum(minor_allele[i::3]>var_cutoff) for i in range(3)])
         axs[0].plot(offset+np.arange(counts.shape[-1]), div, c='r')
         max_freq = np.max(freq, axis=0)
         pos = np.arange(max_freq.shape[0])
@@ -89,7 +88,7 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
             axs[1].plot(sorted(sub_set), np.linspace(1,0, len(sub_set)), c=cols[ci])
 
         offset+=counts.shape[-1]+gap
-        plt.suptitle('sample %s'%sample + ' -- sites>0.05 in codon p1:%d, p2: %d, p3:%d'%(np.sum(minor_allele[0::3]>var_cutoff), np.sum(minor_allele[1::3]>0.05), np.sum(minor_allele[2::3]>0.05)))
+        plt.suptitle(f'sample {sample} -- sites>0.05 in p%3==0: {np.sum(minor_allele[0::3]>var_cutoff)}, p%3=={np.sum(minor_allele[1::3]>var_cutoff)}, p%3==2: {np.sum(minor_allele[2::3]>0.05)}')
 
         if primer_boundaries and ref in primer_boundaries:
             for p in primer_boundaries[ref]:
@@ -197,7 +196,6 @@ if __name__ == '__main__':
             continue
         consensus_seq = consensus(counts, min_cov=args.min_cov)
         cov = coverage(counts)
-        print("cov", cov)
         for pos in ins[ref]:
             if cov[pos]<args.min_cov:
                 continue

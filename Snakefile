@@ -1,5 +1,5 @@
 # nohup snakemake mapped_reads/Q-A/mapped_reads.bam --jobs 32 --cluster "sbatch -t 05:59:00" 1>log2 &
-reference = "..//reference/reference_seq.fasta"
+reference = "../reference/reference_seq.fasta"
 segments = ["MN908947"]
 run = ''
 gen_outdir = "../results"
@@ -15,8 +15,8 @@ rule bwa_index:
 
 rule trim:
     input:
-        r1 = data_dir+"/{sample}_1.fastq.gz",
-        r2 = data_dir+"/{sample}_2.fastq.gz",
+        r1 = data_dir+"/{sample}/{sample}_1.fastq.gz",
+        r2 = data_dir+"/{sample}/{sample}_2.fastq.gz",
     output:
         r1 = gen_outdir+"/{sample}/trimmed_r1.fq.gz",
         r2 = gen_outdir+"/{sample}/trimmed_r2.fq.gz"
@@ -75,13 +75,11 @@ rule consensus:
     params:
         path_to_script =  'src',
         out_dir = gen_outdir + "/{sample}",
-        min_freq = 0.01,
-        min_cov = 1000
+        min_freq = 0.05,
+        min_cov = 100
     shell:
         """
-        echo {params.path_to_script}/coverage_consensus_diversity.py --sample {params.out_dir} --out_dir {params.out_dir} &
         python3 {params.path_to_script}/coverage_consensus_diversity.py --sample {params.out_dir} --out_dir {params.out_dir} &
-        echo {params.path_to_script}/minor_variant.py --sample {params.out_dir} --out_dir {params.out_dir}  --min_freq {params.min_freq} --min_cov {params.min_cov} &
         python3 {params.path_to_script}/minor_variant.py --sample {params.out_dir} --out_dir {params.out_dir} --min_freq {params.min_freq} --min_cov {params.min_cov}
         """
 
