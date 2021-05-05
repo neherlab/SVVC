@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 from create_allele_counts import load_allele_counts
 import glob, sys,os, argparse
 import numpy as np
@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     sample = args.sample.split('/')[-1]
 
-    major_freq = {ref:np.max(x, axis=0) for ref, x in freqs.items()}
+    major_freq = {ref:np.max(x, axis=0) for ref, x in list(freqs.items())}
 
     minor_seqs = {}
     any_minors = False
@@ -62,13 +62,13 @@ if __name__ == '__main__':
         for pos in ins[ref]:
             if cov[pos]<args.min_cov:
                 continue
-            total_insertion = np.sum([c.sum() for insertion, c in ins[ref][pos].items()])
+            total_insertion = np.sum([c.sum() for insertion, c in list(ins[ref][pos].items())])
             total_freq = 1.0*total_insertion/cov[pos]
             if total_freq<args.min_freq:
                 continue
 
             insertions = [[pos, '', 1-total_freq]]
-            for insertion, c in ins[ref][pos].items():
+            for insertion, c in list(ins[ref][pos].items()):
                 ins_freq = 1.0*c.sum()/cov[pos]
                 insertions.append([pos, insertion, ins_freq])
             insertions.sort(key=lambda x:x[2])

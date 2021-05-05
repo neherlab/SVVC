@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 from collections import defaultdict
 import glob, sys,os, argparse
 import numpy as np
@@ -11,7 +11,7 @@ import seaborn as sns
 import pandas as pd
 sns.set_style('whitegrid')
 
-nuc_alpha = np.array(['A', 'C', 'G', 'T', '-', 'N'], dtype='S1')
+nuc_alpha = np.array(['A', 'C', 'G', 'T', '-', 'N'], dtype='U1')
 alpha = nuc_alpha
 gap = 200 # space between segments
 
@@ -85,7 +85,7 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
         max_freq = np.max(freq, axis=0)
         pos = np.arange(max_freq.shape[0])
         for ci in range(3):
-            sub_set = 1-max_freq[((pos%3)==ci) & (cov>1000) & (primer_mask>0)]
+            sub_set = 1-max_freq[((pos%3)==ci) & (cov>1000) & (primer_mask[ref]>0)]
             axs[1].plot(sorted(sub_set), np.linspace(1,0, len(sub_set)), c=cols[ci])
 
         offset+=counts.shape[-1]+gap
@@ -187,7 +187,7 @@ if __name__ == '__main__':
                                        primer_boundaries=primer_boundaries)
     div = plot_diversity(sample, ac, args.out_dir+"/figures/diversity.png", primer_masks,
                          primer_boundaries=primer_boundaries)
-    for k, v in div.items():
+    for k, v in list(div.items()):
         stats[k].update(v)
     from Bio import SeqIO, SeqRecord, Seq
     seqs=[]
@@ -197,13 +197,14 @@ if __name__ == '__main__':
             continue
         consensus_seq = consensus(counts, min_cov=args.min_cov)
         cov = coverage(counts)
+        print("cov", cov)
         for pos in ins[ref]:
             if cov[pos]<args.min_cov:
                 continue
-            total_insertion = np.sum([c.sum() for insertion, c in ins[ref][pos].items()])
+            total_insertion = np.sum([c.sum() for insertion, c in list(ins[ref][pos].items())])
             total_freq = 1.0*total_insertion/cov[pos]
             max_insertion = [pos, 0,0]
-            for insertion, c in ins[ref][pos].items():
+            for insertion, c in list(ins[ref][pos].items()):
                 ins_freq = 1.0*c.sum()/cov[pos]
                 if ins_freq>max_insertion[2]:
                     max_insertion = [pos, insertion, ins_freq]

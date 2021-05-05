@@ -20,7 +20,7 @@ def pair_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
         refs = {}
         read_count = 0
         for nref in range(samfile.nreferences):
-            if VERBOSE: print("allocating for:", samfile.getrname(nref), "length:", samfile.lengths[nref])
+            if VERBOSE: print(("allocating for:", samfile.getrname(nref), "length:", samfile.lengths[nref]))
             refs[nref]=samfile.getrname(nref)
             ac.append((samfile.getrname(nref),  np.zeros((len(nuc_alpha),samfile.lengths[nref]), dtype =int)))
             acc.append((samfile.getrname(nref), {}))
@@ -28,12 +28,12 @@ def pair_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
         while True:
             # find read pairs and skip secondary or supplementary alignments
             try:
-                read1 = samfile.next()
+                read1 = next(samfile)
                 while read1.is_secondary or read1.is_supplementary:
-                    read1 = samfile.next()
-                read2 = samfile.next()
+                    read1 = next(samfile)
+                read2 = next(samfile)
                 while read2.is_secondary or read2.is_supplementary:
-                    read2 = samfile.next()
+                    read2 = next(samfile)
             except:
                 break
 
@@ -159,7 +159,7 @@ def pair_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
                 correct_state = merged_seq==nuc
                 counts[ni,merged_pos[correct_state&good_ind,1]] += 1
 
-            combo = zip(merged_pos[good_ind], merged_seq[good_ind])
+            combo = list(zip(merged_pos[good_ind], merged_seq[good_ind]))
             for (p1, n1), (p2,n2) in combinations(combo, 2):
                 posp = (p1[1], p2[1])
                 p = n1+n2
@@ -176,7 +176,7 @@ def pair_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
 
 if __name__ == '__main__':
     import argparse, gzip
-    import cPickle as pickle
+    import pickle as pickle
     parser = argparse.ArgumentParser(description='create pair counts',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--bam_file',
@@ -191,7 +191,7 @@ if __name__ == '__main__':
 
     fwd_primer_intervals, rev_primer_intervals = get_primer_intervals(args.primers)
 
-    print(fwd_primer_intervals, rev_primer_intervals)
+    print((fwd_primer_intervals, rev_primer_intervals))
     ac, acc = pair_counts(args.bam_file, qual_min=30, VERBOSE=3, max_isize = 600, paired=True, max_reads=args.max_reads,
                           fwd_primer_regions = fwd_primer_intervals, rev_primer_regions = rev_primer_intervals)
     acc_renamed = []
