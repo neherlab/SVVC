@@ -199,9 +199,8 @@ def get_primer_intervals(primer_file):
     rev_primer_intervals = defaultdict(list)
 
     if primer_file:
-        primers = pd.read_csv(primer_file,skipinitialspace=True)
+        primers = pd.read_csv(primer_file,skipinitialspace=True, sep=None)
         for pi,p in primers.iterrows():
-            print((pi,p.loc['name']))
             if 'fwd' in p.loc['name']:
                 fwd_primer_intervals[p.segment].append(sorted((p.start, p.end)))
             else:

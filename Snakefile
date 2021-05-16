@@ -1,9 +1,31 @@
-# nohup snakemake mapped_reads/Q-A/mapped_reads.bam --jobs 32 --cluster "sbatch -t 05:59:00" 1>log2 &
 reference = "../reference/reference_seq.fasta"
 segments = ["MN908947"]
 run = ''
 gen_outdir = "../results"
 data_dir = "../data"
+
+rule:
+    params:
+        primerfile = "https://raw.githubusercontent.com/artic-network/artic-ncov2019/master/primer_schemes/nCoV-2019/V3/nCoV-2019.tsv"
+    output:
+        "primers.tsv"
+    run:
+        import pandas as pd
+        from Bio import SeqIO, Seq
+        raw_primers = pd.read_csv(params.primerfile, sep='\t')
+        ref = str(SeqIO.read(reference, 'fasta').seq)
+        primers = {}
+        for r, row in raw_primers.iterrows():
+            start = ref.find(row.seq)
+            if start<0:
+                start = ref.find(Seq.reverse_complement(row.seq))
+
+            if start>0:
+                primers[row.name] = {"segment":segments[0], "name":row["name"], "seq":row.seq, "start":start, "end":start+len(row.seq)}
+            else:
+                print(f"row {row} failed")
+
+        pd.DataFrame(primers).T.to_csv(output[0], sep='\t', index=False)
 
 rule bwa_index:
     input:
@@ -43,14 +65,15 @@ rule map:
 
 rule pileup:
     input:
-        gen_outdir + "/{sample}/mapped_reads.bam"
+        reads = gen_outdir + "/{sample}/mapped_reads.bam",
+        primers = "primers.tsv"
     output:
         gen_outdir + "/{sample}/" + "allele_counts.npz"
     params:
         path_to_script = 'src',
         out_dir = gen_outdir + "/{sample}"
     shell:
-        "python3 {params.path_to_script}/create_allele_counts.py --bam_file {input} --out_dir {params.out_dir}"
+        "python3 {params.path_to_script}/create_allele_counts.py --bam_file {input.reads} --primers {input.primers} --out_dir {params.out_dir}"
 
 
 rule pair_frequencies:
