@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 from collections import defaultdict
 import glob, sys,os, argparse
 import numpy as np
@@ -11,7 +11,7 @@ import seaborn as sns
 import pandas as pd
 sns.set_style('whitegrid')
 
-nuc_alpha = np.array(['A', 'C', 'G', 'T', '-', 'N'], dtype='S1')
+nuc_alpha = np.array(['A', 'C', 'G', 'T', '-', 'N'], dtype='U1')
 alpha = nuc_alpha
 gap = 200 # space between segments
 
@@ -69,7 +69,7 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
         diversity[ref] = {}
         cov = coverage(counts)
         seg = ref.split('_')[-1]
-        freq = 1.0*counts/cov
+        freq = 1.0*counts/np.maximum(cov,1e-5)
         div = (1-np.sum(freq**2, axis=0))*primer_mask[ref]
         div[cov<min_cov] = 0
         minor_allele = (1.0-np.max(freq, axis=0))*primer_mask[ref]
@@ -80,16 +80,15 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
         diversity[ref]['mean_diversity'] = np.mean(div[cov>min_cov])
         diversity[ref]['mean_diversity>0.01'] = np.mean((div*(minor_allele>0.01))[cov>min_cov])
         diversity[ref]['mean_diversity>0.05'] = np.mean((div*(minor_allele>0.05))[cov>min_cov])
-        print([np.sum(minor_allele[i::3]>var_cutoff) for i in range(3)])
         axs[0].plot(offset+np.arange(counts.shape[-1]), div, c='r')
         max_freq = np.max(freq, axis=0)
         pos = np.arange(max_freq.shape[0])
         for ci in range(3):
-            sub_set = 1-max_freq[((pos%3)==ci) & (cov>1000) & (primer_mask>0)]
+            sub_set = 1-max_freq[((pos%3)==ci) & (cov>1000) & (primer_mask[ref]>0)]
             axs[1].plot(sorted(sub_set), np.linspace(1,0, len(sub_set)), c=cols[ci])
 
         offset+=counts.shape[-1]+gap
-        plt.suptitle('sample %s'%sample + ' -- sites>0.05 in codon p1:%d, p2: %d, p3:%d'%(np.sum(minor_allele[0::3]>var_cutoff), np.sum(minor_allele[1::3]>0.05), np.sum(minor_allele[2::3]>0.05)))
+        plt.suptitle(f'sample {sample} -- sites>0.05 in p%3==0: {np.sum(minor_allele[0::3]>var_cutoff)}, p%3=={np.sum(minor_allele[1::3]>var_cutoff)}, p%3==2: {np.sum(minor_allele[2::3]>0.05)}')
 
         if primer_boundaries and ref in primer_boundaries:
             for p in primer_boundaries[ref]:
@@ -187,7 +186,7 @@ if __name__ == '__main__':
                                        primer_boundaries=primer_boundaries)
     div = plot_diversity(sample, ac, args.out_dir+"/figures/diversity.png", primer_masks,
                          primer_boundaries=primer_boundaries)
-    for k, v in div.items():
+    for k, v in list(div.items()):
         stats[k].update(v)
     from Bio import SeqIO, SeqRecord, Seq
     seqs=[]
@@ -200,10 +199,10 @@ if __name__ == '__main__':
         for pos in ins[ref]:
             if cov[pos]<args.min_cov:
                 continue
-            total_insertion = np.sum([c.sum() for insertion, c in ins[ref][pos].items()])
+            total_insertion = np.sum([c.sum() for insertion, c in list(ins[ref][pos].items())])
             total_freq = 1.0*total_insertion/cov[pos]
             max_insertion = [pos, 0,0]
-            for insertion, c in ins[ref][pos].items():
+            for insertion, c in list(ins[ref][pos].items()):
                 ins_freq = 1.0*c.sum()/cov[pos]
                 if ins_freq>max_insertion[2]:
                     max_insertion = [pos, insertion, ins_freq]

@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 from create_allele_counts import load_allele_counts
 import glob, sys,os, argparse
 import numpy as np
@@ -9,7 +9,7 @@ sns.set_style('whitegrid')
 def trim_ac(ac, n_states=5):
     tmp_ac = {}
     for ref, x in ac:
-        tmp_ac[ref] = x[:n_states].astype(float)/np.sum(x[:n_states], axis=0)
+        tmp_ac[ref] = x[:n_states].astype(float)/np.maximum(1e-5,np.sum(x[:n_states], axis=0))
     return tmp_ac
 
 # Script
@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     sample = args.sample.split('/')[-1]
 
-    major_freq = {ref:np.max(x, axis=0) for ref, x in freqs.items()}
+    major_freq = {ref:np.max(x, axis=0) for ref, x in list(freqs.items())}
 
     minor_seqs = {}
     any_minors = False
@@ -55,20 +55,20 @@ if __name__ == '__main__':
                 alterations.append([pos, nuc_alpha[ii], tmp_freqs[ii]])
 
         if alterations:
-            print(sample, ref, 'minor variants', alterations)
+            print(sample, ref, f'minor variants above {args.min_freq:1.3f}', [x for x in alterations if x[2]>args.min_freq])
             consensus_seq[[p for p,n,f in alterations]] = [n for p,n,f in alterations]
             any_minors = True
 
         for pos in ins[ref]:
             if cov[pos]<args.min_cov:
                 continue
-            total_insertion = np.sum([c.sum() for insertion, c in ins[ref][pos].items()])
+            total_insertion = np.sum([c.sum() for insertion, c in list(ins[ref][pos].items())])
             total_freq = 1.0*total_insertion/cov[pos]
             if total_freq<args.min_freq:
                 continue
 
             insertions = [[pos, '', 1-total_freq]]
-            for insertion, c in ins[ref][pos].items():
+            for insertion, c in list(ins[ref][pos].items()):
                 ins_freq = 1.0*c.sum()/cov[pos]
                 insertions.append([pos, insertion, ins_freq])
             insertions.sort(key=lambda x:x[2])
@@ -77,7 +77,6 @@ if __name__ == '__main__':
 
         seq = "".join(consensus_seq)
         if insertions_to_include:
-            print(sample, ref, 'minor insertions', alterations)
             complete_seq = ""
             pos = 0
             for ins_pos, ins, freq in sorted(insertions_to_include, key=lambda x:x[0]):

@@ -53,8 +53,8 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
     with pysam.Samfile(sam_fname) as samfile:
         ac =  []
         refs = {}
-        for nref in xrange(samfile.nreferences):
-            if VERBOSE: print("allocating for:", samfile.getrname(nref), "length:", samfile.lengths[nref])
+        for nref in range(samfile.nreferences):
+            if VERBOSE: print(("allocating for:", samfile.getrname(nref), "length:", samfile.lengths[nref]))
             refs[nref]=samfile.getrname(nref)
             ac.append((samfile.getrname(nref), ac_array(samfile.lengths[nref], paired),
                         insertion_data_structure(paired)))
@@ -64,7 +64,7 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
             # Max number of reads
             if i == max_reads:
                 if VERBOSE >= 2:
-                    print('Max reads reached:', max_reads)
+                    print(('Max reads reached:', max_reads))
                 break
 
             if read.is_unmapped or np.abs(read.isize)>max_isize or read.is_secondary or read.is_supplementary:
@@ -72,7 +72,7 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
 
             # Print output
             if (VERBOSE > 2) and (not ((i +1) % 10000)):
-                print(i+1)
+                print((i+1))
 
             # Read CIGARs (they should be clean by now)
             if paired:
@@ -156,9 +156,9 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
                     # Accept only high-quality inserts
                     if (qualb >= qual_min).all():
                         if paired:
-                            insertion[pos][seqb.tostring()][int(read.is_read2), int(read.is_reverse)] += 1
+                            insertion[pos][seqb.tostring().decode()][int(read.is_read2), int(read.is_reverse)] += 1
                         else:
-                            insertion[pos][seqb.tostring()][int(read.is_reverse)] += 1
+                            insertion[pos][seqb.tostring().decode()][int(read.is_reverse)] += 1
 
                     # Chop off seq, but not pos
                     if ic != len(read.cigar) - 1:
@@ -169,26 +169,26 @@ def sam_to_allele_counts(sam_fname, paired=False, qual_min=30, max_reads=-1,
                 # Other types of cigar?
                 else:
                     if VERBOSE>2:
-                        print("unrecognized CIGAR type:", read.cigarstring)
+                        print(("unrecognized CIGAR type:", read.cigarstring))
                     #raise ValueError('CIGAR type '+str(block_type)+' not recognized')
 
     return ac
 
 def dump_allele_counts(dirname, ac, suffix=''):
-    import cPickle, gzip, os
+    import pickle, gzip, os
     dirname = dirname.rstrip('/')+'/'
     if not os.path.isdir(dirname):
-        print("creating directory", dirname)
+        print(("creating directory", dirname))
         try:
             os.mkdir(dirname)
         except:
-            raise("creating directory failed", dirname)
+            raise "creating directory failed"
 
     for refname, ac_array, insertions in ac:
         print(refname)
         np.savez_compressed(dirname + 'allele_counts' + suffix + '.npz', ac_array)
         with gzip.open(dirname + 'insertions' + suffix + '.pkl.gz','w') as outfile:
-            cPickle.dump({k:dict(v) for k,v in insertions.iteritems()}, outfile)
+            pickle.dump({k:dict(v) for k,v in insertions.items()}, outfile)
 
 
 def get_primer_intervals(primer_file):
@@ -199,9 +199,8 @@ def get_primer_intervals(primer_file):
     rev_primer_intervals = defaultdict(list)
 
     if primer_file:
-        primers = pd.read_csv(primer_file,skipinitialspace=True)
+        primers = pd.read_csv(primer_file,skipinitialspace=True, sep=None)
         for pi,p in primers.iterrows():
-            print(pi,p.loc['name'])
             if 'fwd' in p.loc['name']:
                 fwd_primer_intervals[p.segment].append(sorted((p.start, p.end)))
             else:
@@ -211,7 +210,7 @@ def get_primer_intervals(primer_file):
 
 
 def load_allele_counts(dirname, suffix='', allCounts=False):
-    import cPickle, gzip, glob
+    import pickle, gzip, glob
     dirname = dirname.rstrip('/')+'/'
     tmp_ac = {}
     if allCounts:
@@ -222,7 +221,7 @@ def load_allele_counts(dirname, suffix='', allCounts=False):
         #print("reading",fname)
         tmp = '_allele_counts' + suffix + '.npz'
         refname = fname.split('/')[-1][:-len(tmp)]
-        tmp_ac[refname] = np.load(fname).items()[0][1]
+        tmp_ac[refname] = list(np.load(fname).items())[0][1]
 
     ins_flist = glob.glob(dirname+'*insertions' + suffix + '.pkl.gz')
     tmp_ins = {}
@@ -231,7 +230,7 @@ def load_allele_counts(dirname, suffix='', allCounts=False):
         tmp = '_insertions' + suffix + '.pkl.gz'
         refname = fname.split('/')[-1][:-len(tmp)]
         with gzip.open(fname) as fh:
-            tmp_ins[refname] = cPickle.load(fh)
+            tmp_ins[refname] = pickle.load(fh)
 
     ac = []
     for refname in tmp_ac:
@@ -255,7 +254,7 @@ if __name__=="__main__":
     parser.add_argument('--primers', type=str, help='file with primers to mask in pile up')
     args = parser.parse_args()
     fwd_primer_intervals, rev_primer_intervals = get_primer_intervals(args.primers)
-    print(fwd_primer_intervals, rev_primer_intervals)
+    print((fwd_primer_intervals, rev_primer_intervals))
     ac = sam_to_allele_counts(args.bam_file, qual_min=30, VERBOSE=3, max_isize = 600, paired=True,
                               fwd_primer_regions = fwd_primer_intervals, rev_primer_regions = rev_primer_intervals)
     ac_renamed = []
