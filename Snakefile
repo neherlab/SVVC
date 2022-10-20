@@ -1,4 +1,4 @@
-reference = "../references/KX675261.fasta"
+reference = "reference/KX675261.fasta"
 segments = ["KX675261.1"]
 run = ''
 gen_outdir = "../results"
