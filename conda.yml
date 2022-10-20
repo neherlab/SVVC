@@ -7,13 +7,11 @@ dependencies:
 - bwa
 - trim-galore
 - samtools
-- python==3.6*
-- pip
-- pip:
-  - numpy
-  - snakemake
-  - pysam
-  - matplotlib
-  - seaborn
-  - pandas
-  - biopython
+- python==3.9*
+- snakemake
+- numpy
+- pysam
+- matplotlib
+- seaborn
+- pandas
+- biopython

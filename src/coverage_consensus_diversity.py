@@ -71,9 +71,9 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
         seg = ref.split('_')[-1]
         freq = 1.0*counts/np.maximum(cov,1e-5)
         div = (1-np.sum(freq**2, axis=0))*primer_mask[ref]
-        div[cov<min_cov] = 0
+        div[cov<min_cov] = 1e-5
         minor_allele = (1.0-np.max(freq, axis=0))*primer_mask[ref]
-        minor_allele[cov<min_cov] = 0
+        minor_allele[cov<min_cov] = 1e-5
         diversity[ref]['var_pos1'] = np.sum(minor_allele[0::3]>var_cutoff)
         diversity[ref]['var_pos2'] = np.sum(minor_allele[1::3]>var_cutoff)
         diversity[ref]['var_pos3'] = np.sum(minor_allele[2::3]>var_cutoff)
@@ -98,8 +98,9 @@ def plot_diversity(sample, ac, figure_path, primer_mask, min_cov=100, var_cutoff
     #plt.xticks([t[0] for t in ticks], [t[1] for t in ticks])
     axs[0].set_yscale('log')
     axs[0].set_ylabel('diversity')
-    axs[1].set_xscale('log')
-    axs[1].set_yscale('log')
+
+    #axs[1].set_xscale('log')
+    #axs[1].set_yscale('log')
     axs[1].set_ylabel('fraction above')
     axs[1].set_xlabel('minor variant frequency')
     plt.savefig(figure_path)

@@ -1,10 +1,10 @@
-reference = "../reference/reference_seq.fasta"
-segments = ["MN908947"]
+reference = "../references/KX675261.fasta"
+segments = ["KX675261.1"]
 run = ''
 gen_outdir = "../results"
 data_dir = "../data"
 
-rule:
+rule primers:
     params:
         primerfile = "https://raw.githubusercontent.com/artic-network/artic-ncov2019/master/primer_schemes/nCoV-2019/V3/nCoV-2019.tsv"
     output:
@@ -27,6 +27,26 @@ rule:
 
         pd.DataFrame(primers).T.to_csv(output[0], sep='\t', index=False)
 
+
+rule concat_data:
+    input:
+        frags = directory(data_dir + "/{sample}")
+    output:
+        r1 = data_dir + "/concat/{sample}/read1.fq.gz",
+        r2 = data_dir + "/concat/{sample}/read2.fq.gz"
+    run:
+        import glob, gzip
+        from Bio import SeqIO
+
+        for r, readfile in zip(['R1', 'R2'], [output.r1, output.r2]):
+            files = sorted(glob.glob(input.frags + f'/*{r}*'))
+            with gzip.open(readfile, 'wt') as out_fh:
+                for in_file in files:
+                    with gzip.open(in_file, 'rt') as ifh:
+                        for read in SeqIO.parse(ifh, 'fastq'):
+                             SeqIO.write(read, out_fh, 'fastq')
+
+
 rule bwa_index:
     input:
         reference
@@ -37,8 +57,8 @@ rule bwa_index:
 
 rule trim:
     input:
-        r1 = data_dir+"/{sample}/{sample}_1.fastq.gz",
-        r2 = data_dir+"/{sample}/{sample}_2.fastq.gz",
+        r1 = data_dir+"/concat/{sample}/read1.fq.gz",
+        r2 = data_dir+"/concat/{sample}/read2.fq.gz",
     output:
         r1 = gen_outdir+"/{sample}/trimmed_r1.fq.gz",
         r2 = gen_outdir+"/{sample}/trimmed_r2.fq.gz"
@@ -49,8 +69,8 @@ rule trim:
         min_length_single = 90,
     shell:
         "trim_galore --length {params.min_length} --output {params.outdir} --retain_unpaired --paired -r1 {params.min_length_single} -r2 {params.min_length_single} {input.r1} {input.r2} &&"
-        "mv {params.outdir}/{wildcards.sample}_1_val_1.fq.gz  {output.r1} &&"
-        "mv {params.outdir}/{wildcards.sample}_2_val_2.fq.gz  {output.r2}"
+        "mv {params.outdir}/read1_val_1.fq.gz  {output.r1} &&"
+        "mv {params.outdir}/read2_val_2.fq.gz  {output.r2}"
 
 rule map:
     input:
